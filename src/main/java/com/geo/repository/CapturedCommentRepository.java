@@ -14,6 +14,8 @@ public interface CapturedCommentRepository extends JpaRepository<CapturedComment
     Page<CapturedComment> findByTaskIdAndIsIgnoredFalse(Long taskId, Pageable pageable);
     Page<CapturedComment> findByTaskIdAndKeywordAndIsIgnoredFalse(Long taskId, String keyword, Pageable pageable);
     long countByUserIdAndIsIgnoredFalse(Long userId);
+    List<CapturedComment> findByTaskIdAndIsIgnoredFalseAndIntentLevelIsNull(Long taskId);
+    long countByTaskIdAndIntentLevel(Long taskId, String intentLevel);
 
     /** 关键词精确 + 内容模糊 + 昵称模糊 联合搜索 */
     @Query("SELECT c FROM CapturedComment c WHERE c.taskId = :taskId AND c.isIgnored = false "

@@ -8,6 +8,7 @@ import com.geo.entity.*;
 import com.geo.repository.*;
 import com.geo.dto.IntentAnalysisResult;
 import com.geo.service.AcquisitionService;
+import com.geo.service.CommentAnalysisService;
 import com.geo.service.DouyinMessageService;
 import com.geo.service.IntentAnalysisService;
 import com.geo.service.PlatformAutomationService;
@@ -35,6 +36,7 @@ public class AcquisitionController {
     private final AcquisitionLeadRepository leadRepo;
     private final Map<String, PlatformAutomationService> platformServices;
     private final DouyinMessageService douyinMessageService;
+    private final CommentAnalysisService commentAnalysisService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AcquisitionController(AcquisitionService acquisitionService,
@@ -45,7 +47,8 @@ public class AcquisitionController {
                                   CapturedCommentRepository commentRepo,
                                   AcquisitionLeadRepository leadRepo,
                                   List<PlatformAutomationService> platformServices,
-                                  DouyinMessageService douyinMessageService) {
+                                  DouyinMessageService douyinMessageService,
+                                  CommentAnalysisService commentAnalysisService) {
         this.acquisitionService = acquisitionService;
         this.intentAnalysisService = intentAnalysisService;
         this.jwtUtil = jwtUtil;
@@ -54,6 +57,7 @@ public class AcquisitionController {
         this.commentRepo = commentRepo;
         this.leadRepo = leadRepo;
         this.douyinMessageService = douyinMessageService;
+        this.commentAnalysisService = commentAnalysisService;
         Map<String, PlatformAutomationService> map = new LinkedHashMap<>();
         for (PlatformAutomationService svc : platformServices) {
             map.put(svc.getPlatform().toLowerCase(), svc);
@@ -425,6 +429,79 @@ public class AcquisitionController {
             results.add(item);
         }
         return Result.success("AI 分析完成，共 " + results.size() + " 条", Map.of("comments", results));
+    }
+
+    // ==================== 批量 AI 分析（核心新接口） ====================
+
+    /**
+     * 对任务下所有未分析评论执行 AI 意向分析
+     * 同步执行（少量评论）或异步执行（大量评论）
+     */
+    @PostMapping("/tasks/{taskId}/analyze")
+    public Result<?> analyzeTaskComments(@RequestHeader("Authorization") String authHeader,
+                                         @PathVariable Long taskId,
+                                         @RequestParam(defaultValue = "false") boolean async) {
+        Long userId = getUserId(authHeader);
+        if (userId == null) return Result.error(401, "未登录或 Token 无效");
+
+        try {
+            AcquisitionTask task = taskRepo.findById(taskId).orElse(null);
+            if (task == null) return Result.error(400, "任务不存在");
+            if (!task.getUserId().equals(userId)) return Result.error(403, "无权访问");
+
+            List<CapturedComment> unanalyzed = commentRepo
+                    .findByTaskIdAndIsIgnoredFalseAndIntentLevelIsNull(taskId);
+            if (unanalyzed.isEmpty()) {
+                return Result.success("没有需要分析的评论", Map.of("total", 0, "message", "所有评论已分析"));
+            }
+
+            if (async || unanalyzed.size() > 20) {
+                // 大量评论走异步，立即返回
+                commentAnalysisService.analyzeTaskCommentsAsync(userId, taskId);
+                return Result.success("已提交异步分析任务，共 " + unanalyzed.size() + " 条评论，稍后查看结果",
+                        Map.of("total", unanalyzed.size(), "async", true));
+            } else {
+                // 少量评论同步执行，立即返回结果
+                Map<String, Object> stats = commentAnalysisService.analyzeTaskComments(userId, taskId);
+                return Result.success("AI 分析完成", stats);
+            }
+        } catch (RuntimeException e) {
+            return Result.error(400, e.getMessage());
+        }
+    }
+
+    /**
+     * 单条评论重新 AI 分析
+     */
+    @PostMapping("/comments/{commentId}/analyze")
+    public Result<?> analyzeSingleComment(@RequestHeader("Authorization") String authHeader,
+                                          @PathVariable Long commentId) {
+        Long userId = getUserId(authHeader);
+        if (userId == null) return Result.error(401, "未登录或 Token 无效");
+
+        try {
+            Map<String, Object> result = commentAnalysisService.analyzeSingleComment(userId, commentId);
+            return Result.success("分析完成", result);
+        } catch (RuntimeException e) {
+            return Result.error(400, e.getMessage());
+        }
+    }
+
+    /**
+     * 获取任务的意向分布统计
+     */
+    @GetMapping("/tasks/{taskId}/intent-stats")
+    public Result<?> getIntentStats(@RequestHeader("Authorization") String authHeader,
+                                    @PathVariable Long taskId) {
+        Long userId = getUserId(authHeader);
+        if (userId == null) return Result.error(401, "未登录或 Token 无效");
+
+        try {
+            Map<String, Object> stats = commentAnalysisService.getIntentStats(userId, taskId);
+            return Result.success("ok", stats);
+        } catch (RuntimeException e) {
+            return Result.error(400, e.getMessage());
+        }
     }
 
     // ==================== 内部方法 ====================
