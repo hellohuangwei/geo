@@ -3,11 +3,9 @@ target/
 .mvn/
 .agents/
 node_modules/
-*.png
-*.txt
+**/node_modules/
 test_*.json
 tmp_*.json
-products_check.txt
 skills-lock.json
 playwright-profile/
 .claude/
