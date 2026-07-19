@@ -1,0 +1,921 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&display=swap');
+
+/* ============================================================
+   GEO ADMIN — Acru Organic Console
+   风格来源: finesse Acru Financial Dashboard
+   底色: #EEF0EC 绿调微灰  ·  卡片: #FFF 纯白
+   强调色: #8BC34A 草绿  ·  圆角: 20px 统一
+   字体: Geist + system sans  ·  间距: 紧凑高密度
+   ============================================================ */
+
+/* ==================== TOKEN DEFINITION ==================== */
+
+:root {
+  /* ---- Substrate ---- */
+  --bg:              #F5F7F3;   /* 页底色 — 极浅绿调灰 */
+  --card:            #FFFFFF;   /* 卡片底色 */
+  --card-hover:      #FAFBFA;   /* 卡片 hover */
+
+  /* ---- Ink (文字阶梯) ---- */
+  --ink:             #1A1C19;   /* 主文字 — 近黑, 永不用 #000 */
+  --ink-2:           #6B6F68;   /* 次级文字 */
+  --ink-3:           #7A7E74;   /* 三级文字 / placeholder — ≥3.5:1 on white */
+
+  /* ---- Accent — 锁定单一草绿 ---- */
+  --accent:          #8BC34A;   /* 草绿主色 */
+  --accent-d:        #6FA838;   /* 草绿深色 */
+  --accent-l:        #AEE15A;   /* 草绿浅色 */
+  --accent-soft:     rgba(139, 195, 74, 0.10);
+
+  /* ---- Data Viz 辅助色 ---- */
+  --yellow:          #F2D63F;
+  --orange:          #F4A94B;
+  --red:             #E56A5A;
+  --blue:            #5B8DEF;
+  --purple:          #A879E0;
+  --teal:            #3FB0A0;
+
+  /* ---- 边框 & 分割线 ---- */
+  --line:            #E5E9E1;   /* border / divider */
+  --line-2:          #EEF1EA;   /* subtle border */
+
+  /* ---- 阴影 — 极度克制, 几乎不可见 ---- */
+  --shadow-card:     0 10px 28px rgba(31, 38, 25, 0.035), 0 1px 2px rgba(0, 0, 0, 0.025);
+  --shadow-card-hover: 0 12px 32px rgba(31, 38, 25, 0.055), 0 1px 2px rgba(0, 0, 0, 0.035);
+  --shadow-xs:       0 1px 2px rgba(0, 0, 0, 0.025);
+  --shadow-focus:    0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
+
+  /* ---- 字阶 — Product 固定级 ---- */
+  --text-caption2: 10px;
+  --text-caption1: 11px;
+  --text-footnote: 11.5px;
+  --text-subhead:  12.5px;
+  --text-callout:  13px;
+  --text-body:     14px;
+  --text-headline: 14.5px;
+  --text-title3:   15px;
+  --text-title2:   18px;
+  --text-title1:   22px;
+  --text-large-title: 26px;
+
+  /* ---- 字重 ---- */
+  --font-weight-regular:  400;
+  --font-weight-medium:   500;
+  --font-weight-semibold: 600;
+  --font-weight-bold:     700;
+  --font-weight-extrabold:800;
+
+  /* ---- 行高 ---- */
+  --line-height-compact: 1.15;
+  --line-height-snug:    1.3;
+  --line-height-normal:  1.45;
+  --line-height-relaxed: 1.55;
+
+  /* ---- 字间距 ---- */
+  --tracking-tight:   -0.03em;
+  --tracking-tighter: -0.02em;
+  --tracking-normal:   0;
+  --tracking-wide:     0.02em;
+  --tracking-wider:    0.04em;
+
+  /* ---- 间距 — 4px 网格 ---- */
+  --space-0-5: 2px;
+  --space-1:   4px;
+  --space-2:   8px;
+  --space-3:   12px;
+  --space-4:   16px;
+  --space-5:   20px;
+  --space-6:   22px;
+  --space-7:   24px;
+  --space-8:   32px;
+  --space-10:  40px;
+  --space-12:  48px;
+
+  /* ---- 圆角 — Acru 统一阶梯 ---- */
+  --radius-sm:   9px;
+  --radius-md:   12px;
+  --radius-lg:   14px;
+  --radius-xl:   16px;
+  --radius-2xl:  16px;
+  --radius-full: 9999px;
+
+  /* ---- 动效 ---- */
+  --duration-faster: 80ms;
+  --duration-fast:   120ms;
+  --duration-normal: 180ms;
+  --duration-slow:   300ms;
+  --ease-out:        cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* ---- 触摸 ---- */
+  --touch-target-min: 44px;
+
+  /* ---- Z-index ---- */
+  --z-popover: 600;
+
+  /* ---- 字体栈 ---- */
+  --font-system: 'Geist', 'Inter', -apple-system, BlinkMacSystemFont,
+    'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', SFMono-Regular, ui-monospace,
+    Menlo, Monaco, 'Cascadia Code', 'Consolas', monospace;
+}
+
+/* ==================== 兼容旧 CSS 变量名 (桥接) ==================== */
+
+:root {
+  --bg-primary:      var(--card);
+  --bg-secondary:    var(--bg);
+  --bg-tertiary:     var(--card);
+  --label-primary:   var(--ink);
+  --label-secondary: var(--ink-2);
+  --label-tertiary:  var(--ink-3);
+  --label-quaternary: var(--system-gray3);
+  --system-blue:     var(--accent);
+  --system-green:    var(--accent-d);
+  --system-orange:   var(--orange);
+  --system-red:      var(--red);
+  --system-pink:     #E8734A;
+  --system-purple:   var(--purple);
+  --system-teal:     var(--teal);
+  --system-indigo:   var(--blue);
+  --system-gray:     var(--ink-3);
+  --system-gray2:    #B0B4AC;
+  --system-gray3:    #C8CBC4;
+  --system-gray4:    #D8DAD4;
+  --system-gray5:    #EAEDE7;
+  --system-gray6:    #F4F6F2;
+  --separator:       var(--line);
+  --fill-primary:    rgba(0, 0, 0, 0.08);
+  --fill-secondary:  rgba(0, 0, 0, 0.05);
+  --fill-tertiary:   rgba(0, 0, 0, 0.03);
+  --fill-quaternary: rgba(0, 0, 0, 0.015);
+}
+
+/* ==================== Tailwind v4 Theme Mapping ==================== */
+
+@theme inline {
+  --radius:              var(--radius-md);
+  --radius-card:         var(--radius-2xl);
+  --radius-button:       var(--radius-md);
+  --radius-input:        var(--radius-md);
+  --radius-badge:        var(--radius-sm);
+
+  --color-background:          var(--bg);
+  --color-foreground:          var(--ink);
+  --color-card:                var(--card);
+  --color-card-foreground:     var(--ink);
+  --color-popover:             var(--card);
+  --color-popover-foreground:  var(--ink);
+  --color-primary:             var(--accent);
+  --color-primary-foreground:  #ffffff;
+  --color-secondary:           var(--fill-secondary);
+  --color-secondary-foreground:var(--ink);
+  --color-muted:               var(--fill-tertiary);
+  --color-muted-foreground:    var(--ink-2);
+  --color-accent:              var(--accent);
+  --color-accent-foreground:   #ffffff;
+  --color-destructive:         var(--red);
+  --color-destructive-foreground: #ffffff;
+  --color-border:              var(--line);
+  --color-input:               var(--card);
+  --color-ring:                var(--accent);
+
+  --color-chart-1: var(--accent);
+  --color-chart-2: var(--accent-d);
+  --color-chart-3: var(--yellow);
+  --color-chart-4: var(--orange);
+  --color-chart-5: var(--blue);
+
+  --color-sidebar:                  var(--card);
+  --color-sidebar-foreground:       var(--ink);
+  --color-sidebar-primary:          var(--accent);
+  --color-sidebar-primary-foreground: #ffffff;
+  --color-sidebar-accent:           var(--accent-soft);
+  --color-sidebar-accent-foreground:var(--accent-d);
+  --color-sidebar-border:           var(--line);
+  --color-sidebar-ring:             var(--accent);
+}
+
+/* ==================== DARK MODE ==================== */
+
+.dark {
+  --bg:              #1A1C19;
+  --card:            #222420;
+  --card-hover:      #252724;
+
+  --ink:             #E8EAE5;
+  --ink-2:           #A0A49C;
+  --ink-3:           #8A8E84;
+
+  --accent:          #8BC34A;
+  --accent-d:        #AEE15A;
+  --accent-l:        #6FA838;
+  --accent-soft:     rgba(139, 195, 74, 0.12);
+
+  --yellow:          #F2D63F;
+  --orange:          #F4A94B;
+  --red:             #E56A5A;
+  --blue:            #7BA7F5;
+  --purple:          #B990EB;
+  --teal:            #4FC4B4;
+
+  --line:            #2E302C;
+  --line-2:          #262824;
+
+  --shadow-card:       0 1px 3px rgba(0, 0, 0, 0.12);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.20);
+  --shadow-xs:         0 1px 2px rgba(0, 0, 0, 0.08);
+  --shadow-focus:      0 0 0 3px rgba(139, 195, 74, 0.25);
+
+  --fill-primary:    rgba(255, 255, 255, 0.08);
+  --fill-secondary:  rgba(255, 255, 255, 0.05);
+  --fill-tertiary:   rgba(255, 255, 255, 0.04);
+  --fill-quaternary: rgba(255, 255, 255, 0.02);
+
+  --system-gray:     var(--ink-3);
+  --system-gray2:    #585C54;
+  --system-gray3:    #484B45;
+  --system-gray4:    #3A3C38;
+  --system-gray5:    #2C2E2A;
+  --system-gray6:    #242522;
+}
+
+/* ==================== GLOBAL RESET ==================== */
+
+* {
+  border-color: var(--line);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-system);
+  font-size: var(--text-body);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-normal);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Subtle grain overlay — breaks digital flatness */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+
+/* ==================== SCROLLBAR — 极细 ==================== */
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--system-gray3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--system-gray2);
+}
+
+/* ==================== TOUCH TARGET EXPANSION ==================== */
+
+/* Small icon buttons get expanded hit area via pseudo-element */
+.icon-btn-sm {
+  position: relative;
+}
+.icon-btn-sm::before {
+  content: '';
+  position: absolute;
+  inset: -8px; /* Expands 24px visual to 40px hit area */
+}
+
+/* ==================== FOCUS RING ==================== */
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+  border-radius: var(--radius-sm);
+}
+
+/* 搜索框不需要光环 */
+.topbar-search input:focus-visible {
+  box-shadow: none;
+  border-radius: 0;
+}
+
+/* ==================== SELECTION ==================== */
+
+::selection {
+  background: rgba(139, 195, 74, 0.20);
+  color: inherit;
+}
+
+/* ============================================================
+   TYPOGRAPHY
+   ============================================================ */
+
+h1, h2, h3, h4 {
+  font-family: var(--font-system);
+  text-wrap: balance;
+}
+
+.page-title {
+  font-family: var(--font-system);
+  font-weight: var(--font-weight-bold);
+  font-size: var(--text-title1);
+  letter-spacing: var(--tracking-tighter);
+  color: var(--ink);
+  line-height: var(--line-height-compact);
+}
+
+.page-desc {
+  font-size: var(--text-footnote);
+  color: var(--ink-3);
+  margin-top: var(--space-1);
+  line-height: var(--line-height-normal);
+}
+
+.section-title {
+  font-family: var(--font-system);
+  font-weight: var(--font-weight-semibold);
+  font-size: var(--text-headline);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.section-icon {
+  width: 1rem;
+  height: 1rem;
+  color: var(--accent-d);
+  opacity: 0.75;
+}
+
+/* 等宽数字 */
+.mono, .num {
+  font-feature-settings: 'tnum';
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+  letter-spacing: var(--tracking-tighter);
+}
+
+/* ============================================================
+   CARDS
+   ============================================================ */
+
+.soft-card,
+.content-card,
+.bento-card {
+  background: var(--card);
+  border: none;
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--duration-normal) var(--ease-out);
+}
+
+.content-card:hover,
+.bento-card:hover {
+  box-shadow: var(--shadow-card-hover);
+}
+
+/* ============================================================
+   BADGES
+   ============================================================ */
+
+.soft-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 10px;
+  border-radius: var(--radius-full);
+  font-size: var(--text-caption1);
+  font-weight: var(--font-weight-semibold);
+  background: var(--fill-tertiary);
+  color: var(--ink-2);
+  line-height: 1.6;
+}
+
+.soft-badge-primary {
+  background: var(--accent-soft);
+  color: var(--accent-d);
+}
+
+.soft-badge-success {
+  background: rgba(111, 168, 56, 0.10);
+  color: var(--accent-d);
+}
+
+.soft-badge-warning {
+  background: rgba(244, 169, 75, 0.10);
+  color: var(--orange);
+}
+
+.soft-badge-danger {
+  background: rgba(229, 106, 90, 0.10);
+  color: var(--red);
+}
+
+/* ============================================================
+   BUTTON UNIFICATION
+   ============================================================ */
+
+.btn-unified {
+  border-radius: var(--radius-md) !important;
+  min-height: var(--touch-target-min);
+}
+
+/* ============================================================
+   INPUT UNIFICATION
+   ============================================================ */
+
+.input-unified {
+  border-radius: var(--radius-md) !important;
+  min-height: var(--touch-target-min);
+}
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
+/* 品牌可见度 — 呼吸脉冲 */
+@keyframes visibilityPulse {
+  0%   { box-shadow: 0 0 0 0 rgba(139,195,74,0.4); }
+  50%  { box-shadow: 0 0 0 6px rgba(139,195,74,0.08); }
+  100% { box-shadow: 0 0 0 0 rgba(139,195,74,0); }
+}
+
+/* AI引用率 — 节点轨道旋转 */
+@keyframes citeOrbit {
+  0%   { transform: rotate(0deg) translateX(11px) rotate(0deg); }
+  100% { transform: rotate(360deg) translateX(11px) rotate(-360deg); }
+}
+
+.animate-in {
+  animation: fadeInUp var(--duration-slow) var(--ease-out) both;
+}
+
+.animate-in-fast {
+  animation: fadeIn var(--duration-normal) var(--ease-out) both;
+}
+
+.animate-scale-in {
+  animation: scaleIn var(--duration-normal) var(--ease-out) both;
+}
+
+.stagger-1 { animation-delay: 0.06s; }
+.stagger-2 { animation-delay: 0.12s; }
+.stagger-3 { animation-delay: 0.18s; }
+.stagger-4 { animation-delay: 0.24s; }
+.stagger-5 { animation-delay: 0.30s; }
+.stagger-6 { animation-delay: 0.36s; }
+.stagger-7 { animation-delay: 0.42s; }
+.stagger-8 { animation-delay: 0.48s; }
+
+/* ============================================================
+   SIDEBAR — Acru 侧栏
+   ============================================================ */
+
+/* ============================================================
+   SIDEBAR — Image-to-Code from design mockup
+   纯白底色 · 绿色圆角 Active pill · 深灰菜单文字
+   ============================================================ */
+
+/* === 侧栏容器 === */
+.sidebar-container {
+  background: var(--card);
+  border-right: 1px solid rgba(0, 0, 0, 0.05);
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.dark .sidebar-container {
+  border-right-color: rgba(255, 255, 255, 0.05);
+}
+
+/* === 菜单列表 === */
+.sidebar-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  scrollbar-width: none;
+  padding: 0 22px 0 24px;
+}
+.sidebar-menu::-webkit-scrollbar { display: none; }
+
+/* === 菜单项 === */
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 10px 14px;
+  margin: 3px 0;
+  border-radius: 9px;
+  background: transparent;
+  transition: background 0.2s ease, color 0.2s ease;
+  color: var(--ink-2);
+  font-size: 14.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-decoration: none;
+  height: 43px;
+  position: relative;
+}
+
+.sidebar-item:hover {
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.03);
+}
+
+/* Active — 绿色圆角 pill，匹配设计稿 */
+.sidebar-item.active {
+  background: rgba(139, 195, 74, 0.12);
+  color: #5B8C2A;
+  font-weight: 600;
+  font-size: 14.5px;
+}
+.sidebar-item.active::before {
+  content: "";
+  position: absolute;
+  left: -16px;
+  top: 11px;
+  bottom: 11px;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--accent-d);
+}
+.dark .sidebar-item.active {
+  background: rgba(139, 195, 74, 0.15);
+  color: var(--accent-l);
+}
+
+.sidebar-item:active {
+  transform: scale(0.985);
+}
+
+/* === 图标 === */
+.sidebar-item-icon {
+  width: 18px;
+  height: 18px;
+  color: currentColor;
+  flex-shrink: 0;
+}
+
+/* === 菜单名称 === */
+.sidebar-item-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: inherit;
+  font-weight: inherit;
+}
+
+/* === Badge === */
+.sidebar-badge {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 600;
+  background: rgba(139, 195, 74, 0.12);
+  color: #5B8C2A;
+  min-width: 19px;
+  height: 19px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  line-height: 1;
+}
+.dark .sidebar-badge {
+  background: rgba(139, 195, 74, 0.15);
+  color: var(--accent-l);
+}
+
+/* === 子项列表 === */
+.sidebar-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 8px 0 6px 16px;
+  padding-left: 17px;
+  border-left: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.sidebar-sub .sidebar-item {
+  padding: 8px 9px;
+  font-size: 14px;
+  height: 38px;
+  border-radius: 8px;
+  margin: 2px 0;
+}
+.sidebar-sub-icon {
+  width: 15px;
+  height: 15px;
+  opacity: 0.72;
+  flex-shrink: 0;
+}
+
+/* === 分组标题 === */
+.sidebar-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 2px 8px;
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-2);
+  cursor: pointer;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  transition: color 0.2s ease;
+}
+
+.sidebar-group-header:hover {
+  color: var(--ink-2);
+}
+
+.sidebar-group-header .group-chevron {
+  transition: transform 0.25s ease;
+}
+
+/* === 折叠态 === */
+.sidebar-item-collapsed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: transparent;
+  transition: background 0.2s ease, color 0.2s ease;
+  color: var(--ink-2);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+
+.sidebar-item-collapsed:hover {
+  background: rgba(0, 0, 0, 0.03);
+  color: var(--ink);
+}
+
+.sidebar-item-collapsed.active {
+  background: rgba(139, 195, 74, 0.12);
+  color: #5B8C2A;
+}
+.dark .sidebar-item-collapsed.active {
+  background: rgba(139, 195, 74, 0.15);
+  color: var(--accent-l);
+}
+
+.sidebar-item-collapsed:active {
+  transform: scale(0.95);
+}
+
+/* === 底部操作 === */
+.sidebar-collapse-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 13px;
+  margin: 0;
+  color: var(--ink-3);
+  font-size: 14.5px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  background: none;
+  width: calc(100% - 16px);
+  text-align: left;
+  border-radius: 8px;
+  transition: color 0.2s ease, background 0.2s ease;
+  height: 43px;
+}
+
+.sidebar-collapse-btn:hover {
+  color: var(--ink);
+  background: rgba(0, 0, 0, 0.03);
+}
+
+/* === 品牌区 === */
+.sidebar-brand {
+  padding: 32px 36px 28px;
+}
+.sidebar-brand-collapsed {
+  display: flex;
+  justify-content: center;
+  padding: 18px 0 12px;
+}
+
+.sidebar-footer {
+  border-top: 1px solid var(--line-2);
+  margin: 0 30px;
+}
+.sidebar-footer .sidebar-item,
+.sidebar-footer .sidebar-collapse-btn {
+  width: 100%;
+}
+
+/* ============================================================
+   TOAST
+   ============================================================ */
+
+[data-sonner-toaster] li {
+  width: fit-content !important;
+  max-width: 380px;
+  font-family: var(--font-system);
+}
+
+/* ============================================================
+   DIFF HIGHLIGHTS
+   ============================================================ */
+
+.diff-added {
+  padding-left: var(--space-3);
+  background: rgba(111, 168, 56, 0.08);
+  border-radius: var(--radius-sm);
+}
+
+.diff-modified {
+  padding-left: var(--space-3);
+  background: rgba(244, 169, 75, 0.06);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  position: relative;
+  transition: background var(--duration-fast);
+}
+
+.diff-modified:hover {
+  background: rgba(244, 169, 75, 0.06);
+}
+
+.diff-modified::after {
+  content: '· ' attr(data-original);
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  max-width: 460px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--card);
+  color: var(--ink);
+  font-size: var(--text-caption1);
+  line-height: var(--line-height-relaxed);
+  border-radius: var(--radius-md);
+  white-space: pre-wrap;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.10);
+  border: 1px solid var(--line);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity var(--duration-fast) var(--ease-out),
+              transform var(--duration-fast) var(--ease-out);
+  z-index: var(--z-popover);
+}
+
+.diff-modified:hover::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ============================================================
+   TOPBAR ELEMENTS — Acru style
+   ============================================================ */
+
+.topbar-search {
+  flex: 1;
+  max-width: 352px;
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card);
+  border: 1px solid var(--line-2);
+  border-radius: 13px;
+  padding: 12px 16px;
+  color: var(--ink-3);
+  font-size: 13px;
+  box-shadow: var(--shadow-card);
+}
+
+.topbar-icon-btn {
+  width: 46px;
+  height: 46px;
+  border-radius: 13px;
+  background: var(--card);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-card);
+  border: none;
+}
+
+.topbar-acct {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--card);
+  border-radius: 13px;
+  min-height: 46px;
+  padding: 6px 8px 6px 14px;
+  box-shadow: var(--shadow-card);
+}
+
+/* ============================================================
+   REDUCED MOTION
+   ============================================================ */
+
+/* ==================== 登录页动效 ==================== */
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes grain-drift {
+  0%, 100% { transform: translate(0, 0); }
+  10%      { transform: translate(-1%, -0.5%); }
+  30%      { transform: translate(0.5%, -1%); }
+  50%      { transform: translate(-0.5%, 1%); }
+  70%      { transform: translate(1%, 0.5%); }
+  90%      { transform: translate(-1%, 1%); }
+}
+
+.login-stagger-1 { animation: fade-in-up .45s .05s cubic-bezier(.16,1,.3,1) both; }
+.login-stagger-2 { animation: fade-in-up .45s .15s cubic-bezier(.16,1,.3,1) both; }
+.login-stagger-3 { animation: fade-in-up .45s .25s cubic-bezier(.16,1,.3,1) both; }
+.login-stagger-4 { animation: fade-in-up .45s .35s cubic-bezier(.16,1,.3,1) both; }
+.login-stagger-5 { animation: fade-in-up .45s .45s cubic-bezier(.16,1,.3,1) both; }
+
+.login-card-glow {
+  transition: box-shadow .5s ease;
+}
+.login-card-glow:focus-within {
+  box-shadow: 0 4px 32px rgba(139, 195, 74, 0.10), 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.login-input-focus {
+  transition: box-shadow .25s ease, border-color .25s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-faster: 0ms;
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+    --duration-slow: 0ms;
+  }
+
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
