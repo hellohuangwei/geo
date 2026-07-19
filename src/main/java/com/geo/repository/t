@@ -1,0 +1,69 @@
+参考附件中的 Dashboard 布局思路，但不要复制 UI，而是重新设计一套更现代、更国际化、更符合 2026 AI SaaS 产品的 Dashboard。
+
+设计目标：
+打造一套接近 Linear、Vercel、Notion、Stripe、Arc Browser 风格的 AI GEO Dashboard，整体风格极简、高信息密度、企业级。
+
+布局要求：
+
+1. Header（约90px）
+- 页面标题
+- 副标题
+- 时间筛选
+- 平台筛选
+- Export
+- Refresh
+- Ask AI
+- 用户头像
+- 移除重复 KPI
+
+2. Hero KPI（首页重点）
+采用不对称布局，而不是四个一样大的卡片：
+- Brand Visibility（最大卡，环形进度图）
+- Average Rank
+- AI Citation Rate
+- Platform Coverage（展示 GPT、Claude、Gemini、Perplexity、Grok、DeepSeek 等平台 Logo、覆盖率和趋势）
+
+3. Metrics Grid
+下面展示 6~8 个紧凑的数据指标：
+- Mentions
+- Citations
+- Indexed Pages
+- Issues
+- Tasks
+- Keywords
+- Opportunities
+- 每个 Card 包含：
+  - Icon
+  - 数值
+  - 同比变化
+  - Mini Sparkline
+
+4. Trend Analysis
+趋势分析作为页面 Hero，可切换：
+- Visibility
+- Rank
+- Citation
+- Coverage
+支持 7D / 30D / 90D。
+
+5. Bottom Layout（左右双栏）
+左侧：
+- Trending Questions（列表 + 热度 + 平台 + 趋势）
+右侧：
+- AI Insights（LLM 自动分析）
+- Platform Health（平台同步状态）
+- Recent Activity（最近监控日志）
+
+视觉要求：
+- 大量留白但保持高信息密度
+- Border 优先，弱阴影
+- 16px 圆角
+- Glass + Soft Gradient
+- Hover 动效
+- 平滑过渡动画
+- 统一 8pt Grid
+- 字体层级清晰
+- 卡片高度统一
+- 页面视觉重心明确
+
+不要照搬参考图，不要使用传统 Admin Dashboard 风格，而是输出一个更高级、更现代、更有产品感、更符合国际 AI SaaS 产品的设计。
