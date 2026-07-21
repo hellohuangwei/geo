@@ -12,6 +12,7 @@ import com.geo.service.CommentAnalysisService;
 import com.geo.service.DouyinMessageService;
 import com.geo.service.IntentAnalysisService;
 import com.geo.service.PlatformAutomationService;
+import com.geo.service.PlaywrightManager;
 import com.geo.util.JwtUtil;
 import com.geo.util.Result;
 import org.slf4j.Logger;
@@ -37,6 +38,7 @@ public class AcquisitionController {
     private final Map<String, PlatformAutomationService> platformServices;
     private final DouyinMessageService douyinMessageService;
     private final CommentAnalysisService commentAnalysisService;
+    private final PlaywrightManager playwrightManager;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public AcquisitionController(AcquisitionService acquisitionService,
@@ -48,7 +50,8 @@ public class AcquisitionController {
                                   AcquisitionLeadRepository leadRepo,
                                   List<PlatformAutomationService> platformServices,
                                   DouyinMessageService douyinMessageService,
-                                  CommentAnalysisService commentAnalysisService) {
+                                  CommentAnalysisService commentAnalysisService,
+                                  PlaywrightManager playwrightManager) {
         this.acquisitionService = acquisitionService;
         this.intentAnalysisService = intentAnalysisService;
         this.jwtUtil = jwtUtil;
@@ -58,6 +61,7 @@ public class AcquisitionController {
         this.leadRepo = leadRepo;
         this.douyinMessageService = douyinMessageService;
         this.commentAnalysisService = commentAnalysisService;
+        this.playwrightManager = playwrightManager;
         Map<String, PlatformAutomationService> map = new LinkedHashMap<>();
         for (PlatformAutomationService svc : platformServices) {
             map.put(svc.getPlatform().toLowerCase(), svc);
@@ -501,6 +505,200 @@ public class AcquisitionController {
             return Result.success("ok", stats);
         } catch (RuntimeException e) {
             return Result.error(400, e.getMessage());
+        }
+    }
+
+    /**
+     * 检查 Edge CDP 调试端口是否就绪（只读，不触发任何操作）。
+     */
+    @GetMapping("/cdp/status")
+    public Result<?> cdpStatus(@RequestHeader(value = "Authorization", required = false) String authHeader) {
+        Long userId = getUserId(authHeader);
+        if (userId == null) return Result.error(401, "未登录或 Token 无效");
+
+        boolean reachable = playwrightManager.isCdpReachable();
+        return Result.success("ok", Map.of("cdpReady", reachable));
+    }
+
+    /**
+     * 确保 Edge 浏览器 CDP 调试端口就绪。
+     * 如果端口不通，会 kill 所有 Edge 进程并用真实 profile 重启（保留 Cookie/登录态），
+     * 同时在重启后的浏览器中打开 GEO 页面。
+     */
+    @GetMapping("/cdp/ensure")
+    public Result<?> ensureCdp(@RequestHeader(value = "Authorization", required = false) String authHeader,
+                               @RequestHeader(value = "Referer", required = false) String referer) {
+        Long userId = getUserId(authHeader);
+        if (userId == null) return Result.error(401, "未登录或 Token 无效");
+
+        try {
+            boolean wasReachable = playwrightManager.isCdpReachable();
+            if (wasReachable) {
+                return Result.success("CDP 调试端口已就绪", Map.of("cdpReady", true, "wasAlreadyRunning", true));
+            }
+
+            log.info("CDP not reachable, killing Edge and restarting with --remote-debugging-port=9222...");
+            playwrightManager.getBrowser(); // kill 全部 Edge 并用真实 profile 重启
+
+            boolean nowReachable = playwrightManager.isCdpReachable();
+            // 重启后在 Edge 中打开 GEO 页面
+            if (nowReachable && referer != null && !referer.isBlank()) {
+                try {
+                    var contexts = playwrightManager.getBrowser().contexts();
+                    if (!contexts.isEmpty()) {
+                        var page = contexts.get(0).newPage();
+                        page.navigate(referer);
+                        log.info("Opened GEO page in restarted Edge: {}", referer);
+                    }
+                } catch (Exception e) {
+                    log.warn("Failed to open GEO page after restart: {}", e.getMessage());
+                }
+            }
+            return Result.success(
+                nowReachable ? "已重启 Edge 并开启 CDP 调试端口" : "CDP 启动中，请稍候",
+                Map.of("cdpReady", nowReachable, "wasAlreadyRunning", false)
+            );
+        } catch (Exception e) {
+            log.error("CDP ensure failed: {}", e.getMessage(), e);
+            return Result.error(500, "CDP 调试端口启动失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 一条龙：保存任务 → kill Edge 重启 CDP → 执行采集。
+     * 前端确认弹窗后调用此接口，即使前端页面被杀也能完成后端采集。
+     */
+    @PostMapping("/cdp/ensure-and-run")
+    public Result<?> ensureCdpAndRun(@RequestHeader(value = "Authorization", required = false) String authHeader,
+                                     @RequestBody Map<String, Object> body) {
+        Long userId = getUserId(authHeader);
+        if (userId == null) return Result.error(401, "未登录或 Token 无效");
+
+        String taskIdStr = String.valueOf(body.getOrDefault("taskId", ""));
+        String keyword = String.valueOf(body.getOrDefault("keyword", "")).trim();
+        if (keyword.isEmpty()) return Result.error(400, "keyword 不能为空");
+
+        try {
+            Long taskId = Long.parseLong(taskIdStr);
+            AcquisitionTask task = taskRepo.findById(taskId).orElse(null);
+            if (task == null || !task.getUserId().equals(userId)) {
+                return Result.error(400, "任务不存在");
+            }
+
+            String platformKey = task.getPlatform() != null ? task.getPlatform().toLowerCase() : "douyin";
+            PlatformAutomationService platformSvc = platformServices.get(platformKey);
+            if (platformSvc == null) return Result.error(400, "Unsupported platform: " + platformKey);
+
+            // Step 1: 确保 CDP（kill Edge + 重启）
+            if (!playwrightManager.isCdpReachable()) {
+                log.info("CDP not reachable, killing Edge and restarting...");
+                playwrightManager.getBrowser();
+            }
+
+            // Step 2: 更新任务状态
+            Map<String, Object> config = new LinkedHashMap<>(parseConfig(task.getConfigJson()));
+            config.put("keyword", keyword);
+            String searchUrl = buildSearchUrl(keyword);
+            task.setConfigJson(objectMapper.writeValueAsString(config));
+            task.setCurrentKeyword(keyword);
+            task.setLastSearchUrl(searchUrl);
+            task.setStatus("running");
+            task.setLastRunAt(LocalDateTime.now());
+            taskRepo.save(task);
+
+            // Step 3: 执行采集
+            log.info("Starting acquisition: taskId={}, keyword='{}'", taskId, keyword);
+            List<Map<String, Object>> rawList = platformSvc.execute(task);
+            log.info("Collected {} raw comments", rawList.size());
+
+            boolean captchaDetected = rawList.stream().anyMatch(
+                c -> Boolean.TRUE.equals(c.get("_captchaDetected")));
+
+            Set<String> seenComments = new HashSet<>();
+            Set<String> seenVideos = new HashSet<>();
+            List<Map<String, Object>> result = new ArrayList<>();
+            for (Map<String, Object> raw : rawList) {
+                if (Boolean.TRUE.equals(raw.get("_captchaDetected"))) continue;
+                String content = String.valueOf(raw.getOrDefault("content", ""));
+                if (content.isBlank()) continue;
+                String videoUrl = String.valueOf(raw.getOrDefault("videoUrl", ""));
+                String nickname = String.valueOf(raw.getOrDefault("nickname", ""));
+                String dedupeKey = String.join("|", videoUrl, nickname, content);
+                if (!seenComments.add(dedupeKey)) continue;
+                if (!videoUrl.isBlank()) seenVideos.add(videoUrl);
+                result.add(raw);
+
+                CapturedComment comment = new CapturedComment();
+                comment.setUserId(userId);
+                comment.setTaskId(taskId);
+                comment.setPlatform(platformKey);
+                comment.setKeyword(keyword);
+                comment.setVideoUrl(videoUrl.isBlank() ? null : videoUrl);
+                comment.setVideoTitle(strVal(raw.get("videoTitle"), null));
+                comment.setVideoAuthorName(strVal(raw.get("videoAuthorName"), null));
+                comment.setCommenterNickname(nickname);
+                comment.setCommenterPlatformId(strVal(raw.get("douyinId"), null));
+                comment.setCommenterAvatarUrl(strVal(raw.get("avatarUrl"), null));
+                comment.setContent(content);
+                comment.setLikes(raw.get("likes") instanceof Number n ? n.intValue() : 0);
+                comment.setReplyCount(raw.get("replyCount") instanceof Number n ? n.intValue() : 0);
+                String publishedAt = strVal(raw.get("publishedAt"), null);
+                if (publishedAt != null && !publishedAt.isBlank()) {
+                    try { comment.setPublishedAt(LocalDateTime.parse(publishedAt.substring(0, 19))); } catch (Exception ignored) {}
+                }
+                commentRepo.save(comment);
+            }
+
+            task.setAnalyzedCommentCount(task.getAnalyzedCommentCount() + result.size());
+            task.setCollectedVideoCount(task.getCollectedVideoCount() + seenVideos.size());
+            task.setStatus(captchaDetected ? "executor_required" : "completed");
+            task.setLastRunAt(LocalDateTime.now());
+            taskRepo.save(task);
+
+            // Step 4: 清理抖音标签页 + 打开前端页面
+            String returnUrl = String.valueOf(body.getOrDefault("returnUrl", "")).trim();
+            cleanupAndNavigate(returnUrl);
+
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("taskId", task.getId());
+            data.put("keyword", keyword);
+            data.put("searchUrl", searchUrl);
+            data.put("commentCount", result.size());
+            data.put("videoCount", seenVideos.size());
+            data.put("captchaDetected", captchaDetected);
+            data.put("comments", result);
+            String msg = "采集完成，共 " + result.size() + " 条评论"
+                + (captchaDetected ? "（检测到验证码）" : "");
+            return Result.success(msg, data);
+        } catch (Exception e) {
+            log.error("CDP ensure-and-run failed: {}", e.getMessage(), e);
+            return Result.error(500, "采集失败: " + e.getMessage());
+        }
+    }
+
+    /** 采集完成后：关闭所有抖音标签页，打开前端页面，恢复窗口 */
+    private void cleanupAndNavigate(String returnUrl) {
+        try {
+            if (!playwrightManager.isBrowserReady()) return;
+            var browser = playwrightManager.getBrowser();
+            var contexts = browser.contexts();
+            for (var ctx : contexts) {
+                for (var page : ctx.pages()) {
+                    String url = page.url().toLowerCase();
+                    if (url.contains("douyin.com") || url.contains("edge://newtab") || url.contains("127.0.0.1:9222")) {
+                        try { page.close(); } catch (Exception ignored) {}
+                    }
+                }
+            }
+            // 打开前端页面并恢复窗口（采集期间浏览器处于最小化状态）
+            if (!returnUrl.isBlank() && !contexts.isEmpty()) {
+                var page = contexts.get(0).newPage();
+                page.navigate(returnUrl);
+                page.bringToFront(); // 采集完成，恢复窗口让用户看到结果
+                log.info("Opened frontend page and brought to front: {}", returnUrl);
+            }
+        } catch (Exception e) {
+            log.warn("cleanupAndNavigate failed: {}", e.getMessage());
         }
     }
 

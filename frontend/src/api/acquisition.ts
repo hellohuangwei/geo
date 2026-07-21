@@ -334,6 +334,32 @@ export async function fetchStatsApi(): Promise<AcquisitionStats> {
   return res.data as AcquisitionStats
 }
 
+// --- CDP ---
+export interface CdpStatusResponse {
+  cdpReady: boolean
+}
+
+export async function checkCdpStatusApi(): Promise<CdpStatusResponse> {
+  const res = await apiClient.get<CdpStatusResponse>('/acquisition/cdp/status')
+  return res.data as CdpStatusResponse
+}
+
+export interface CdpEnsureResponse {
+  cdpReady: boolean
+  wasAlreadyRunning: boolean
+}
+
+export async function ensureCdpApi(): Promise<CdpEnsureResponse> {
+  const res = await apiClient.get<CdpEnsureResponse>('/acquisition/cdp/ensure')
+  return res.data as CdpEnsureResponse
+}
+
+/** 一条龙：kill Edge 重启 CDP + 执行采集 + 关抖音页 + 打开前端页面 */
+export async function ensureCdpAndRunApi(taskId: string, keyword: string, returnUrl?: string): Promise<RunTaskResponse> {
+  const res = await apiClient.post<RunTaskResponse>('/acquisition/cdp/ensure-and-run', { taskId, keyword, returnUrl })
+  return res.data as RunTaskResponse
+}
+
 // --- Batch send messages ---
 export interface BatchSendMessagesResult {
   success: number

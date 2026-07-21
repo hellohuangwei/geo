@@ -395,7 +395,7 @@ async function main() {
       if (batch.length > 0) {
         plog('collect', `视频${videoCount}: +${batch.length}条  累计: ${allComments.length}/${targetCount}`);
       } else {
-        plog('skip', `视频${videoCount}: 无评论`);
+        plog('skip', `视频${videoCount}: 跳过（标题不匹配或无评论）`);
       }
 
       if (allComments.length >= targetCount) {
@@ -485,11 +485,46 @@ async function collectVideoComments(ctx, searchPage, commentCollector, commentCa
     detailPage = await ctx.newPage();
     await antiDetect(detailPage).catch(() => {});
     const marker = commentCollector.mark(detailPage);
-    log('  Opening video detail page for comment collection...');
+    log('  Opening video detail page...');
     await detailPage.goto(videoUrl, { waitUntil: 'domcontentloaded', timeout: 25000 }).catch((e) => {
       log(`  Video detail navigation warning: ${e.message}`);
     });
     await detailPage.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+
+    // ---- 检查 1：视频标题是否匹配搜索关键词 ----
+    const videoTitle = await detailPage.evaluate(() => {
+      // 优先取 og:title，其次页面 title，再取 h1
+      const ogTitle = document.querySelector('meta[property="og:title"]')?.getAttribute('content') || '';
+      if (ogTitle) return ogTitle.trim();
+      const h1 = document.querySelector('h1')?.innerText || '';
+      if (h1) return h1.trim();
+      return (document.title || '').trim();
+    }).catch(() => '');
+    log(`  Video title: "${videoTitle?.slice(0, 60) || '(unknown)'}"`);
+
+    if (kw && videoTitle) {
+      const minMatchRatio = parseFloat(process.env.DOUYIN_TITLE_MATCH_THRESHOLD) || 0.5;
+      const matchResult = computeTitleMatch(kw, videoTitle);
+      log(`  Title match: score=${(matchResult.score * 100).toFixed(0)}% method=${matchResult.method} title="${videoTitle.slice(0, 60)}"`);
+      if (matchResult.score < minMatchRatio) {
+        log(`  SKIP: title doesn't match keyword (score=${(matchResult.score * 100).toFixed(0)}% < ${(minMatchRatio * 100).toFixed(0)}%)`);
+        return [];
+      }
+      log(`  Title matched keyword (${(matchResult.score * 100).toFixed(0)}%, method=${matchResult.method})`);
+    }
+
+    // ---- 检查 2：视频是否有评论 ----
+    const commentCount = await detailPage.evaluate(() => {
+      // 查找评论数显示
+      const body = document.body?.innerText || '';
+      const match = body.match(/(\d+\.?\d*[万亿]?)\s*(?:条?评论|条回复)/);
+      return match ? match[1] : null;
+    }).catch(() => null);
+    if (commentCount === '0' || commentCount === '0.0') {
+      log(`  SKIP: video has no comments`);
+      return [];
+    }
+
     await activateCommentPanel(detailPage);
     allComments = await commentCollector.collectVideo(detailPage, kw, videoUrl, marker, stats);
 
@@ -1239,6 +1274,56 @@ function normalizeComment(raw) {
     likes: parseInt(String(raw.digg_count ?? raw.like_count ?? raw.likes ?? 0), 10) || 0,
     replyCount: parseInt(String(raw.reply_comment_total ?? raw.reply_count ?? 0), 10) || 0,
   };
+}
+
+// ---- 标题-关键词匹配（中文语义级） ----
+function computeTitleMatch(keyword, title) {
+  const kw = keyword.replace(/\s+/g, '').toLowerCase();
+  const tl = title.replace(/\s+/g, '').toLowerCase();
+  if (!kw || !tl) return { score: 0, method: 'empty' };
+
+  // 拆分搜索词（按空格/逗号/顿号/中文分隔符）
+  const terms = keyword.split(/[\s,，、]+/).filter(t => t.length > 0);
+  const allTerms = terms.length > 1 ? terms : [keyword.trim()];
+
+  const termScores = allTerms.map(term => singleTermMatch(term, title));
+  const avgScore = termScores.reduce((a, b) => a + b, 0) / termScores.length;
+
+  // 如果任一子词完全匹配，加权提升
+  let method = termScores.length > 1 ? 'multi-term' : 'single';
+  let finalScore = avgScore;
+  if (termScores.some(s => s >= 0.95)) finalScore = Math.max(finalScore, 0.9);
+  if (allTerms.some(t => tl.includes(t.toLowerCase().replace(/\s+/g, ''))))
+    finalScore = Math.max(finalScore, 0.95);
+
+  return { score: finalScore, method };
+}
+
+function singleTermMatch(term, title) {
+  const t = term.replace(/\s+/g, '').toLowerCase();
+  const tl = title.replace(/\s+/g, '').toLowerCase();
+  if (!t || !tl) return 0;
+
+  // 1) 完整子串匹配 — 最高置信度
+  if (tl.includes(t)) return 1.0;
+
+  // 2) 中文 bigram 匹配 — 适用于 2+ 字的关键词
+  if (t.length >= 2) {
+    const bigrams = [];
+    for (let i = 0; i < t.length - 1; i++) bigrams.push(t.substring(i, i + 2));
+    const matched = bigrams.filter(bg => tl.includes(bg)).length;
+    const bigramScore = matched / bigrams.length;
+    if (bigramScore >= 0.5) return bigramScore;
+  }
+
+  // 3) 字符集匹配 — 回退方案
+  const matchedChars = t.split('').filter(c => tl.includes(c)).length;
+  const charRatio = matchedChars / t.length;
+
+  // 4) 惩罚：关键词比标题长很多时大概率不相关
+  if (t.length > tl.length * 2) return charRatio * 0.6;
+
+  return charRatio;
 }
 
 function videoIdFromUrl(url) {

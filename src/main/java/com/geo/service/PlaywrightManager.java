@@ -17,8 +17,9 @@ import java.util.Random;
 /**
  * Playwright browser manager.
  * Connects to the user's existing Edge browser via CDP (Chrome DevTools Protocol).
- * If Edge isn't running with debugging enabled, it launches Edge with the user's
- * default profile + --remote-debugging-port so all logins/cookies are preserved.
+ * If no Edge is running with debugging enabled, it kills all Edge processes and
+ * relaunches with the user's real profile + --remote-debugging-port, so all
+ * logins/cookies are preserved after restart.
  */
 @Service
 public class PlaywrightManager {
@@ -90,35 +91,35 @@ public class PlaywrightManager {
                 }
 
                 // Step 2: Edge not running with CDP.
-                // Edge locks the user-data-dir, so we must kill the existing Edge first,
-                // then relaunch with --remote-debugging-port.
+                // Kill all Edge processes, then relaunch with user's real profile + CDP.
+                // This preserves all cookies/logins after restart.
                 String edgePath = findEdgePath();
                 if (edgePath == null) {
                     throw new RuntimeException("Cannot find Microsoft Edge. Install Edge or set acquisition.playwright.channel=chromium");
                 }
                 String userDataDir = getEdgeUserDataDir();
 
-                // Kill existing Edge processes so the new one can own the profile
                 log.info("Killing existing Edge processes to enable CDP...");
                 killEdgeProcesses();
 
-                // Launch Edge with user's real profile + CDP
-                log.info("Launching Edge with CDP (bookmarks/passwords preserved)...");
+                log.info("Launching Edge with CDP (real profile, cookies preserved, MINIMIZED)...");
                 log.info("  Edge: {}", edgePath);
                 log.info("  Profile: {}", userDataDir);
+                // 使用 cmd /c start /MIN 最小化启动，不抢用户焦点
+                // 初始打开 about:blank（干净页），采集会在另外的标签页静默执行
                 ProcessBuilder pb = new ProcessBuilder(
+                        "cmd", "/c", "start", "/MIN", "",
                         edgePath,
                         "--remote-debugging-port=" + CDP_PORT,
                         "--user-data-dir=" + userDataDir,
                         "--profile-directory=Default",
                         "--no-first-run",
                         "--no-default-browser-check",
-                        "https://www.douyin.com/jingxuan"
+                        "about:blank"
                 );
                 pb.redirectErrorStream(true);
                 edgeProcess = pb.start();
 
-                // Wait for CDP to become available
                 boolean cdpReady = false;
                 for (int i = 0; i < 30; i++) {
                     Thread.sleep(1500);
@@ -126,14 +127,13 @@ public class PlaywrightManager {
                         browser = pw.chromium().connectOverCDP(CDP_URL);
                         browserReady = true;
                         cdpReady = true;
-                        log.info("Edge launched and connected via CDP! {} context(s)", browser.contexts().size());
+                        log.info("Edge relaunched and connected via CDP! {} context(s)", browser.contexts().size());
                         return browser;
                     } catch (Exception retryErr) {
                         if (i % 5 == 0) log.info("  Waiting for CDP... (attempt {}/{})", i, 30);
                     }
                 }
                 if (!cdpReady) {
-                    // Edge may have started but CDP still not available
                     throw new RuntimeException("Edge launched but CDP not available after 45s. "
                             + "Is Edge already running? Close all Edge windows and retry.");
                 }
@@ -234,6 +234,14 @@ public class PlaywrightManager {
             log.info("Edge processes terminated");
         } catch (Exception e) {
             log.warn("Failed to kill Edge processes: {}", e.getMessage());
+        }
+    }
+
+    /** Delete a file (used to clean lock files from copied profile). */
+    private void deleteFile(String path) {
+        try {
+            java.nio.file.Files.deleteIfExists(Path.of(path));
+        } catch (Exception ignored) {
         }
     }
 

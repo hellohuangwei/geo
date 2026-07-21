@@ -22,16 +22,19 @@ public class AcquisitionExecutor {
     private final AcquisitionTaskRepository taskRepo;
     private final AcquisitionRunLogRepository logRepo;
     private final CapturedCommentRepository commentRepo;
+    private final RelevanceFilterService relevanceFilter;
     private final Map<String, PlatformAutomationService> platformServices;
 
     public AcquisitionExecutor(
             AcquisitionTaskRepository taskRepo,
             AcquisitionRunLogRepository logRepo,
             CapturedCommentRepository commentRepo,
+            RelevanceFilterService relevanceFilter,
             List<PlatformAutomationService> platformServices) {
         this.taskRepo = taskRepo;
         this.logRepo = logRepo;
         this.commentRepo = commentRepo;
+        this.relevanceFilter = relevanceFilter;
         Map<String, PlatformAutomationService> map = new LinkedHashMap<>();
         for (PlatformAutomationService svc : platformServices) {
             map.put(svc.getPlatform().toLowerCase(), svc);
@@ -81,7 +84,18 @@ public class AcquisitionExecutor {
                 rawComments.add(item);
             }
 
-            // 2. 保存评论到数据库（去重后）
+            // 2. AI 相关性过滤（如果启用）
+            if (relevanceFilter.isEnabled() && !searchKeyword.isBlank()) {
+                int beforeFilter = rawComments.size();
+                int skipped = relevanceFilter.filterResults(searchKeyword, rawComments);
+                if (skipped > 0) {
+                    addLog(userId, taskId, "running",
+                            String.format("AI relevance filter: removed %d/%d irrelevant comments (%.0f%% kept)",
+                                    skipped, beforeFilter, (beforeFilter - skipped) * 100.0 / beforeFilter));
+                }
+            }
+
+            // 3. Save comments to DB（去重后）
             int commentCount = 0;
             Set<String> seenComments = new HashSet<>();
             Set<String> seenVideos = new HashSet<>();
@@ -118,7 +132,7 @@ public class AcquisitionExecutor {
                 commentCount++;
             }
 
-            // 3. Update task stats
+            // 4. Update task stats
             task.setStatus("completed");
             task.setAnalyzedCommentCount(task.getAnalyzedCommentCount() + commentCount);
             task.setLeadCount(task.getLeadCount());

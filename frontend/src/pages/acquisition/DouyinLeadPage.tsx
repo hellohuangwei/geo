@@ -31,7 +31,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ContentCard } from '@/components/ContentCard'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { analyzeCommentsApi } from '@/api/acquisition'
+import { analyzeCommentsApi, checkCdpStatusApi, ensureCdpApi } from '@/api/acquisition'
 import { fetchBrandProfileApi } from '@/api/brandProfile'
 import {
   addLeadFromDouyinComment,
@@ -103,6 +103,7 @@ export function DouyinLeadPage() {
   const [messageDialogOpen, setMessageDialogOpen] = useState(false)
   const [messageText, setMessageText] = useState('')
   const [sending, setSending] = useState(false)
+  const [cdpKillDialogOpen, setCdpKillDialogOpen] = useState(false)
   const streamAbortRef = useRef<AbortController | null>(null)
   const searchLoadedOnceRef = useRef(false)
   const refreshSeqRef = useRef(0)
@@ -258,6 +259,55 @@ export function DouyinLeadPage() {
     }
   }
 
+  /** CDP 已就绪时的正常采集流程 */
+  const doSampling = async () => {
+    const nextConfig = getCommittedConfig()
+    if (!nextConfig.keyword) {
+      toast.error('请先配置搜索关键词')
+      return
+    }
+    const task = await saveDouyinTask({
+      id: selectedTaskId || undefined,
+      name: nextConfig.keyword || '采集任务',
+      config: nextConfig,
+    })
+    syncSelectedTask(task)
+    setWorkspace((prev) => prev ? {
+      ...prev,
+      comments: [],
+      tasks: prev.tasks.map((item) =>
+        item.id === task.id ? { ...item, status: 'running' as const } : item
+      ),
+    } : null)
+
+    toast.info(`正在采集：${nextConfig.keyword}`)
+    const result = await startDouyinTask(task.id, nextConfig.keyword)
+    const data = await refresh(task.id, 0)
+
+    setWorkspace((prev) => prev ? {
+      ...prev,
+      comments: data.comments,
+      commentTotal: data.commentTotal,
+      commentPages: data.commentPages,
+      commentPage: data.commentPage,
+      tasks: prev.tasks.map((item) =>
+        item.id === task.id
+          ? {
+              ...item,
+              status: result.captchaDetected ? 'executor_required' as const : 'completed' as const,
+              analyzedCommentCount: result.captchaDetected ? item.analyzedCommentCount : result.commentCount,
+            }
+          : item
+      ),
+    } : null)
+    if (result.captchaDetected) {
+      toast.warning('检测到抖音验证码，请在当前抖音页面手动完成验证。GEO 已暂停采集，不会刷新验证页面。', { duration: 12000 })
+      return
+    }
+    toast.success(`采集完成，共 ${result.commentCount} 条评论`)
+  }
+
+  /** 点击"开始采集"——先检查 CDP，不通则弹确认窗 */
   const handleStart = async () => {
     const nextConfig = getCommittedConfig()
     if (!nextConfig.keyword) {
@@ -265,7 +315,29 @@ export function DouyinLeadPage() {
       return
     }
     setSubmitting(true)
+    let cdpReady = false
     try {
+      const status = await checkCdpStatusApi()
+      cdpReady = status.cdpReady
+    } catch { /* 检查失败按 CDP 不通处理 */ }
+    if (!cdpReady) {
+      setSubmitting(false)
+      setCdpKillDialogOpen(true)
+      return
+    }
+    // CDP 已就绪，直接采集
+    try { await doSampling() } catch (err) {
+      toast.error(err instanceof Error ? err.message : '采集失败')
+    } finally { setSubmitting(false) }
+  }
+
+  /** 用户确认重启浏览器 → 先存配置 → 重启 CDP → 走正常采集流程 */
+  const handleCdpConfirm = async () => {
+    setCdpKillDialogOpen(false)
+    setSubmitting(true)
+    try {
+      // 先保存任务配置，防止浏览器关闭后配置丢失
+      const nextConfig = getCommittedConfig()
       const task = await saveDouyinTask({
         id: selectedTaskId || undefined,
         name: nextConfig.keyword || '采集任务',
@@ -273,41 +345,9 @@ export function DouyinLeadPage() {
       })
       syncSelectedTask(task)
 
-      setWorkspace((prev) => prev ? {
-        ...prev,
-        comments: [],
-        tasks: prev.tasks.map((item) =>
-          item.id === task.id ? { ...item, status: 'running' as const } : item
-        ),
-      } : null)
-
-      toast.info(`正在采集：${nextConfig.keyword}`)
-      const result = await startDouyinTask(task.id, nextConfig.keyword)
-
-      // 采集完成后从 API 重新加载评论，确保分页和任务过滤正确
-      const data = await refresh(task.id, 0)
-
-      setWorkspace((prev) => prev ? {
-        ...prev,
-        comments: data.comments,
-        commentTotal: data.commentTotal,
-        commentPages: data.commentPages,
-        commentPage: data.commentPage,
-        tasks: prev.tasks.map((item) =>
-          item.id === task.id
-            ? {
-                ...item,
-                status: result.captchaDetected ? 'executor_required' as const : 'completed' as const,
-                analyzedCommentCount: result.captchaDetected ? item.analyzedCommentCount : result.commentCount,
-              }
-            : item
-        ),
-      } : null)
-      if (result.captchaDetected) {
-        toast.warning('检测到抖音验证码，请在当前抖音页面手动完成验证。GEO 已暂停采集，不会刷新验证页面。', { duration: 12000 })
-        return
-      }
-      toast.success(`采集完成，共 ${result.commentCount} 条评论`)
+      await ensureCdpApi() // 重启 Edge（最小化，不抢焦点）
+      // 重启后走跟 CDP 就绪时完全一样的采集流程
+      await doSampling()
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '采集失败')
     } finally {
@@ -654,6 +694,34 @@ export function DouyinLeadPage() {
               <Button onClick={handleSendMessages} disabled={sending || !messageText.trim()} className="gap-1.5">
                 {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 {sending ? '发送中...' : '发送'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 浏览器重启确认弹窗 */}
+      <Dialog open={cdpKillDialogOpen} onOpenChange={setCdpKillDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>需要重启浏览器</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded-[10px] border border-[rgba(244,169,75,0.3)] bg-[rgba(244,169,75,0.08)] px-4 py-3">
+              <p className="text-[13px] leading-relaxed text-[var(--ink)]">
+                <AlertCircle className="mr-1.5 inline-block h-4 w-4 text-[var(--orange)]" />
+                采集工具需要接管浏览器，将 <span className="font-semibold text-[var(--orange)]">关闭并重启 Edge</span>。
+              </p>
+              <p className="mt-2 text-[12px] leading-relaxed text-[var(--ink-2)]">
+                重启后会自动打开 GEO 页面并开始采集，登录状态不会丢失。
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setCdpKillDialogOpen(false)}>
+                取消
+              </Button>
+              <Button onClick={handleCdpConfirm} className="gap-1.5 bg-[var(--orange)] hover:bg-[var(--orange)]/90">
+                确认重启
               </Button>
             </div>
           </div>
