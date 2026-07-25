@@ -1,0 +1,13 @@
+{
+  "name": "openclaw-browser-connector",
+  "version": "1.0.0",
+  "description": "Remote browser connector for OpenClaw — client-server architecture for browser-based Skills",
+  "scripts": {
+    "relay": "node server/relay.mjs",
+    "bridge": "node client/browser-bridge.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "^1.40.0",
+    "ws": "^8.16.0"
+  }
+}

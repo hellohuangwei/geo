@@ -1,13 +1,4 @@
-.local-jdk/
-target/
-.mvn/
-.agents/
 node_modules/
-**/node_modules/
-test_*.json
-tmp_*.json
-skills-lock.json
-playwright-profile/
-.claude/
-.codex/
-/geo/
+openclaw-browser-connector/tasks/
+*.log
+.env
