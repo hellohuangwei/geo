@@ -2,3 +2,5 @@ node_modules/
 openclaw-browser-connector/tasks/
 *.log
 .env
+.DS_Store
+/dist/
