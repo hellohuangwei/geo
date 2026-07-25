@@ -1,4 +1,4 @@
-# OpenClaw 智能体 — LLM 自适应抖音评论采集
+# OpenClaw Agent — LLM 自适应抖音评论采集
 
 基于 DeepSeek v4-pro 的 ReAct 自适应评论采集系统。LLM 观察每一步结果，自主决策下一步操作。
 
@@ -32,7 +32,7 @@
 ### 1. 安装依赖
 
 ```bash
-git clone -b 智能体 https://github.com/hellohuangwei/geo.git
+git clone -b agent https://github.com/hellohuangwei/geo.git
 cd geo
 
 # 安装 browser-connector 依赖
