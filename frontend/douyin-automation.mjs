@@ -447,19 +447,19 @@ async function collectVideoCommentsLegacy(searchPage, commentCache, kw, videoUrl
   }
 
   // 局部刷新模式：直接在搜索页静默调用抖音评论 API，无需打开视频页面
-  let allComments = await fetchCommentApi(searchPage, videoId);
+  let allComments = await fetchCommentApi(searchPage, videoId, { videoId, videoUrl });
 
   if (allComments.length === 0) {
     // 重试：可能是网络波动
     log('  First API call empty, retrying...');
     await sleep(2000);
-    allComments = await fetchCommentApi(searchPage, videoId);
+    allComments = await fetchCommentApi(searchPage, videoId, { videoId, videoUrl });
   }
 
   // 去重
   const deduped = [];
   for (const item of allComments) {
-    const normalized = { ...item, keyword: kw, videoUrl };
+    const normalized = { ...item, keyword: kw };
     if (!commentCache.add(normalized)) continue;
     deduped.push(normalized);
   }
@@ -480,6 +480,7 @@ async function collectVideoComments(ctx, searchPage, commentCollector, commentCa
 
   let detailPage = null;
   let allComments = [];
+  const videoMeta = { videoId, videoUrl, videoTitle: '', authorName: '' };
 
   try {
     detailPage = await ctx.newPage();
@@ -501,6 +502,17 @@ async function collectVideoComments(ctx, searchPage, commentCollector, commentCa
       return (document.title || '').trim();
     }).catch(() => '');
     log(`  Video title: "${videoTitle?.slice(0, 60) || '(unknown)'}"`);
+
+    // 提取作者名
+    const authorName = await detailPage.evaluate(() => {
+      const authorEl = document.querySelector('[data-e2e="user-info"] span, [class*="author-name"], [class*="authorName"], [class*="nickname"], a[href*="/user/"] span, [class*="Account"] span');
+      if (authorEl) return (authorEl.innerText || authorEl.textContent || '').trim();
+      return '';
+    }).catch(() => '');
+    log(`  Video author: "${authorName?.slice(0, 40) || '(unknown)'}"`);
+
+    videoMeta.videoTitle = videoTitle || '';
+    videoMeta.authorName = authorName || '';
 
     if (kw && videoTitle) {
       const minMatchRatio = parseFloat(process.env.DOUYIN_TITLE_MATCH_THRESHOLD) || 0.5;
@@ -526,11 +538,11 @@ async function collectVideoComments(ctx, searchPage, commentCollector, commentCa
     }
 
     await activateCommentPanel(detailPage);
-    allComments = await commentCollector.collectVideo(detailPage, kw, videoUrl, marker, stats);
+    allComments = await commentCollector.collectVideo(detailPage, kw, videoUrl, marker, videoMeta, stats);
 
     if (allComments.length === 0) {
       log('  Detail page intercept empty, trying detail-page API fetch...');
-      allComments = await fetchCommentApi(detailPage, videoId, stats);
+      allComments = await fetchCommentApi(detailPage, videoId, videoMeta, stats);
     }
   } finally {
     if (detailPage) {
@@ -541,12 +553,12 @@ async function collectVideoComments(ctx, searchPage, commentCollector, commentCa
   if (allComments.length === 0) {
     log('  Detail page returned empty, retrying from search page API...');
     await sleep(1000);
-    allComments = await fetchCommentApi(searchPage, videoId, stats);
+    allComments = await fetchCommentApi(searchPage, videoId, videoMeta, stats);
   }
 
   const deduped = [];
   for (const item of allComments) {
-    const normalized = { ...item, keyword: kw, videoUrl };
+    const normalized = { keyword: kw, ...videoMeta, ...item };
     if (!commentCache.add(normalized)) continue;
     deduped.push(normalized);
   }
@@ -555,7 +567,7 @@ async function collectVideoComments(ctx, searchPage, commentCollector, commentCa
   return deduped;
 }
 
-async function fetchCommentApi(page, videoId, stats = null) {
+async function fetchCommentApi(page, videoId, extra = {}, stats = null) {
   const all = [];
   let cursor = 0;
   const MAX_PAGES = 30;
@@ -584,16 +596,7 @@ async function fetchCommentApi(page, videoId, stats = null) {
 
     const comments = result.comments || [];
     for (const c of comments) {
-      const user = c.user || {};
-      all.push({
-        nickname: user.nickname || '抖音用户',
-        douyinId: user.sec_uid || user.unique_id || user.short_id || user.uid || '',
-        avatarUrl: user.avatar_thumb?.url_list?.[0] || user.avatar_medium?.url_list?.[0] || '',
-        content: String(c.text || '').trim().slice(0, 500),
-        publishedAt: c.create_time ? new Date(c.create_time * 1000).toISOString() : '',
-        likes: c.digg_count || 0,
-        replyCount: c.reply_comment_total || 0,
-      });
+      all.push(normalizeComment(c, { ...extra, videoId }));
     }
 
     log(`  API page ${p}: ${comments.length} comments, cursor=${cursor}, has_more=${result.has_more}`);
@@ -1002,13 +1005,20 @@ async function scrapeCommentsFromDOM(page) {
       if (seen.has(key)) continue;
       seen.add(key);
 
+      // 提取 douyinId（从用户链接）
+      let douyinId = '';
+      const userLink = el.querySelector('a[href*="/user/"]');
+      if (userLink) {
+        const m = (userLink.getAttribute('href') || '').match(/\/user\/([^/?]+)/);
+        if (m) douyinId = m[1];
+      }
       // 尝试提取时间和点赞数
       const timeEl = el.querySelector('[class*="time"], [class*="date"], [class*="Time"], [class*="Date"], time');
       const likeEl = el.querySelector('[class*="like"], [class*="digg"], [class*="Like"], [class*="Digg"]');
       const publishedAt = timeEl ? (timeEl.getAttribute('datetime') || timeEl.innerText || '').trim() : '';
       const likes = likeEl ? parseInt((likeEl.innerText || '0').replace(/[^0-9]/g, '')) || 0 : 0;
 
-      results.push({ nickname: name, douyinId: '', content, publishedAt, likes, replyCount: 0 });
+      results.push({ nickname: name, douyinId, content, publishedAt, likes, replyCount: 0 });
     }
 
     // 策略4：最后的回退 - 搜索任何包含「回复」「展开」等评论区特征词的元素
@@ -1028,7 +1038,14 @@ async function scrapeCommentsFromDOM(page) {
           const key = `${name}|${content}`;
           if (seen.has(key)) continue;
           seen.add(key);
-          results.push({ nickname: name, douyinId: '', content, publishedAt: '', likes: 0, replyCount: 0 });
+          // 尝试从父元素找用户链接
+          let did = '';
+          const ul = el.parentElement?.querySelector('a[href*="/user/"]');
+          if (ul) {
+            const um = (ul.getAttribute('href') || '').match(/\/user\/([^/?]+)/);
+            if (um) did = um[1];
+          }
+          results.push({ nickname: name, douyinId: did, content, publishedAt: '', likes: 0, replyCount: 0 });
         }
       }
     }
@@ -1111,7 +1128,7 @@ function createCommentCollector(ctx) {
         try { p.off('response', onResponse); } catch {}
       }
     },
-    async collectVideo(page, kw, videoUrl, marker, stats) {
+    async collectVideo(page, kw, videoUrl, marker, videoMeta = {}, stats) {
       attach(page);
       const collected = [];
       let cursor = marker?.index ?? events.length;
@@ -1128,7 +1145,9 @@ function createCommentCollector(ctx) {
           } else {
             emptyApis++;
           }
-          if (event.event.hasMore === false || emptyApis >= MAX_EMPTY_COMMENT_API) break;
+          if (event.event.hasMore === false || event.event.hasMore === undefined || emptyApis >= MAX_EMPTY_COMMENT_API) break;
+          // 每视频最多收 200 条，避免无限循环
+          if (collected.length >= 200) break;
         } else {
           emptyApis++;
           if (emptyApis >= MAX_EMPTY_COMMENT_API) break;
@@ -1138,6 +1157,7 @@ function createCommentCollector(ctx) {
           emptyApis++;
           if (emptyApis >= MAX_EMPTY_COMMENT_API) break;
         }
+        if (collected.length >= 200) break;
       }
 
       if (collected.length === 0) {
@@ -1149,7 +1169,7 @@ function createCommentCollector(ctx) {
         }
       }
 
-      return collected.map(item => ({ ...item, keyword: kw, videoUrl }));
+      return collected.map(item => ({ keyword: kw, ...videoMeta, ...item }));
     },
   };
 }
@@ -1262,17 +1282,26 @@ function extractCommentObjects(value, found = []) {
   return found;
 }
 
-function normalizeComment(raw) {
+function normalizeComment(raw, extra = {}) {
   const user = raw.user || raw.user_info || raw.comment_user || {};
   const createTime = Number(raw.create_time || raw.createTime || 0);
+  const cid = String(raw.cid || raw.comment_id || '');
   return {
     nickname: String(user.nickname || user.nick_name || raw.nickname || '抖音用户'),
-    douyinId: String(user.unique_id || user.short_id || user.sec_uid || user.uid || ''),
+    douyinId: String(user.sec_uid || user.unique_id || user.short_id || user.uid || ''),
     avatarUrl: user.avatar_thumb?.url_list?.[0] || user.avatar_medium?.url_list?.[0] || '',
     content: String(raw.text || raw.content || raw.comment_text || raw.desc || '').trim().slice(0, 500),
     publishedAt: createTime > 0 ? new Date(createTime * 1000).toISOString() : undefined,
     likes: parseInt(String(raw.digg_count ?? raw.like_count ?? raw.likes ?? 0), 10) || 0,
     replyCount: parseInt(String(raw.reply_comment_total ?? raw.reply_count ?? 0), 10) || 0,
+    cid,
+    commentUrl: cid ? `https://www.douyin.com/video/${extra.videoId || ''}?commentId=${cid}` : (extra.videoUrl || ''),
+    // 视频级字段（由上层注入，只有 extra 有值时才带）
+    ...(extra.videoId ? { videoId: extra.videoId } : {}),
+    ...(extra.videoTitle ? { videoTitle: extra.videoTitle } : {}),
+    ...(extra.videoUrl ? { videoUrl: extra.videoUrl } : {}),
+    ...(extra.authorName ? { authorName: extra.authorName } : {}),
+    ...(extra.keyword ? { keyword: extra.keyword } : {}),
   };
 }
 

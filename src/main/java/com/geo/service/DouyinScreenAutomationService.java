@@ -23,7 +23,13 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * @deprecated 已替换为 Playwright 浏览器自动化方案，请使用 {@code AcquisitionService + DouyinAutomationService}
+ * @deprecated 自 2025 年起已废弃，计划在 v2.0 中移除。
+ * 请使用 {@link com.geo.service.PlaywrightManager PlaywrightManager}
+ * 搭配 {@link com.geo.service.impl.DouyinAutomationService DouyinAutomationService}
+ * 进行浏览器自动化，或使用 {@link com.geo.service.AcquisitionService AcquisitionService}。
+ * <p>
+ * 此方案使用 Java AWT Robot 进行屏幕图像模板匹配，在真实环境中已验证不可靠。
+ * 保留此文件仅供历史参考。
  */
 @Deprecated
 

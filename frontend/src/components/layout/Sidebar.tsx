@@ -49,7 +49,8 @@ const menuGroups: MenuGroup[] = [
   {
     key: 'ai-acquisition', label: 'AI 获客', icon: UserPlus,
     items: [
-      { to: '/acquisition/overview', label: '抖音获客', icon: Target },
+      { to: '/acquisition/douyin-chat', label: '抖音获客', icon: Target },
+      { to: '/acquisition/overview', label: '采集管理', icon: Eye },
     ],
   },
   {

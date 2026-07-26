@@ -1,0 +1,15 @@
+{
+  "name": "douyin-client",
+  "version": "2.0.0",
+  "description": "抖音采集客户端 — 在本机运行，桥接服务器指令到本地浏览器",
+  "type": "module",
+  "scripts": {
+    "bridge": "node bridge.mjs",
+    "login": "node login.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "^1.52.0",
+    "puppeteer-core": "^25.3.0",
+    "ws": "^8.21.1"
+  }
+}

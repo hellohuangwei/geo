@@ -23,7 +23,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 @Component
-@ConditionalOnProperty(name = "llm.provider", havingValue = "ollama", matchIfMissing = true)
+@ConditionalOnProperty(name = "llm.provider", havingValue = "ollama")
 public class OllamaLlmProvider implements LlmProvider {
 
     private static final Logger log = LoggerFactory.getLogger(OllamaLlmProvider.class);
@@ -135,7 +135,9 @@ public class OllamaLlmProvider implements LlmProvider {
                         JsonNode node = objectMapper.readTree(line);
                         String token = node.get("response").asText("");
                         if (!token.isEmpty()) { full.append(token); onToken.accept(token); }
-                    } catch (Exception ignored) {}
+                    } catch (Exception e) {
+                        log.warn("Ollama SSE 行解析失败: {}", e.getMessage());
+                    }
                 }
             }
             log.info("Ollama 流式生成 {} 字符", full.length());

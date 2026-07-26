@@ -11,3 +11,6 @@ playwright-profile/
 .claude/
 .codex/
 /geo/
+.vite/
+frontend/douyin-cdp-profile/
+test-proxy.mjs

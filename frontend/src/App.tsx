@@ -23,6 +23,7 @@ import { ProductProfilePage } from '@/pages/ProductProfilePage'
 import { ProductDetailPage } from '@/pages/ProductDetailPage'
 import { TopicsSettingsPage } from '@/pages/settings/TopicsSettingsPage'
 import { DouyinLeadPage } from '@/pages/acquisition/DouyinLeadPage'
+import { DouyinChatPage } from '@/pages/acquisition/DouyinChatPage'
 import { Toaster } from '@/components/ui/sonner'
 
 function AppInit({ children }: { children: React.ReactNode }) {
@@ -63,6 +64,7 @@ export default function App() {
               <Route path="/content/articles/:id/edit" element={<ArticleEditPage />} />
               {/* AI 获客 */}
               <Route path="/acquisition/overview" element={<DouyinLeadPage />} />
+              <Route path="/acquisition/douyin-chat" element={<DouyinChatPage />} />
               {/* 知识库 & 设置 */}
               <Route path="/knowledge-base" element={<KnowledgeBasePage />} />
               <Route path="/settings" element={<SettingsPage />} />
